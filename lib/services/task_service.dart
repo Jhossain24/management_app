@@ -2,19 +2,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/task.dart';
 
 class TaskService {
-  final CollectionReference _tasksCollection = FirebaseFirestore.instance
-      .collection('tasks');
+  final CollectionReference _tasksCollection =
+      FirebaseFirestore.instance.collection('tasks');
 
-  // real-time updates for streams
   Stream<List<Task>> streamTasks() {
     return _tasksCollection
         .orderBy('createdAt', descending: false)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            return Task.fromMap(doc.id, doc.data() as Map<String, dynamic>);
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        return Task.fromMap(doc.id, doc.data() as Map<String, dynamic>);
+      }).toList();
+    });
   }
 
   Future<void> addTask(String title) async {
@@ -34,7 +33,6 @@ class TaskService {
     });
   }
 
-  // dlete a task
   Future<void> deleteTask(String taskId) async {
     await _tasksCollection.doc(taskId).delete();
   }
@@ -49,22 +47,27 @@ class TaskService {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
     });
 
-    await _tasksCollection.doc(task.id).update({'subtasks': updatedSubtasks});
+    await _tasksCollection.doc(task.id).update({
+      'subtasks': updatedSubtasks,
+    });
   }
 
-  // toggle subtask completion
   Future<void> toggleSubtask(Task task, int subtaskIndex) async {
     final List<Map<String, dynamic>> updatedSubtasks = List.from(task.subtasks);
     updatedSubtasks[subtaskIndex]['isCompleted'] =
         !(updatedSubtasks[subtaskIndex]['isCompleted'] as bool);
 
-    await _tasksCollection.doc(task.id).update({'subtasks': updatedSubtasks});
+    await _tasksCollection.doc(task.id).update({
+      'subtasks': updatedSubtasks,
+    });
   }
 
   Future<void> deleteSubtask(Task task, int subtaskIndex) async {
     final List<Map<String, dynamic>> updatedSubtasks = List.from(task.subtasks);
     updatedSubtasks.removeAt(subtaskIndex);
 
-    await _tasksCollection.doc(task.id).update({'subtasks': updatedSubtasks});
+    await _tasksCollection.doc(task.id).update({
+      'subtasks': updatedSubtasks,
+    });
   }
 }

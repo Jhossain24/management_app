@@ -13,12 +13,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
   final TaskService _taskService = TaskService();
   final TextEditingController _taskController = TextEditingController();
   final TextEditingController _subtaskController = TextEditingController();
+
   String? _expandedTaskId;
+
+  @override
+  void dispose() {
+    _taskController.dispose();
+    _subtaskController.dispose();
+    super.dispose();
+  }
 
   void _addTask() {
     final title = _taskController.text;
-    if (title.trim() == null || title == '') {
-      setState(() {});
+    if (title.trim().isEmpty) {
       _showSnackBar('Please enter a task name');
       return;
     }
@@ -29,6 +36,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   void _showAddSubtaskDialog(Task task) {
+    _subtaskController.clear();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -45,7 +53,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (_subtaskController.text.isNotEmpty) {
+              if (_subtaskController.text.trim().isNotEmpty) {
                 _taskService.addSubtask(task, _subtaskController.text);
                 _showSnackBar('Subtask added');
               }
@@ -136,6 +144,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
       body: Column(
         children: [
+          // Input Section
           Container(
             padding: const EdgeInsets.all(16),
             color: Colors.grey[100],
@@ -165,14 +174,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
             ),
           ),
 
+          // Task List Section
           Expanded(
             child: StreamBuilder<List<Task>>(
               stream: _taskService.streamTasks(),
               builder: (context, snapshot) {
+                // Loading state
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
+                // Error state
                 if (snapshot.hasError) {
                   return Center(
                     child: Column(
@@ -197,6 +209,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
                 final tasks = snapshot.data ?? [];
 
+                // Empty state
                 if (tasks.isEmpty) {
                   return const Center(
                     child: Column(
@@ -225,6 +238,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   );
                 }
 
+                // Data state
                 return ListView.builder(
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
@@ -287,6 +301,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             },
                           ),
 
+                          // Expanded subtasks section
                           if (isExpanded)
                             Container(
                               decoration: const BoxDecoration(
