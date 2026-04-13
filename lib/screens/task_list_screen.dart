@@ -15,17 +15,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
   final TextEditingController _subtaskController = TextEditingController();
   String? _expandedTaskId;
 
-  @override
-  void dispose() {
-    _taskController.dispose();
-    _subtaskController.dispose();
-    super.dispose();
-  }
-
   void _addTask() {
-    if (_taskController.text.trim().isEmpty) return;
-    _taskService.addTask(_taskController.text);
+    final title = _taskController.text;
+    if (title.trim() == null || title == '') {
+      setState(() {});
+      _showSnackBar('Please enter a task name');
+      return;
+    }
+
+    _taskService.addTask(title);
     _taskController.clear();
+    _showSnackBar('Task added successfully');
   }
 
   void _showAddSubtaskDialog(Task task) {
@@ -35,7 +35,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
         title: const Text('Add Subtask'),
         content: TextField(
           controller: _subtaskController,
-          decoration: const InputDecoration(hintText: 'Subtask name'),
+          decoration: const InputDecoration(hintText: 'Enter subtask name...'),
+          autofocus: true,
         ),
         actions: [
           TextButton(
@@ -44,11 +45,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              if (_subtaskController.text.trim().isNotEmpty) {
+              if (_subtaskController.text.isNotEmpty) {
                 _taskService.addSubtask(task, _subtaskController.text);
-                _subtaskController.clear();
-                Navigator.pop(context);
+                _showSnackBar('Subtask added');
               }
+              Navigator.pop(context);
             },
             child: const Text('Add'),
           ),
@@ -57,30 +58,113 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
+  void _showDeleteConfirmDialog(String taskId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Task'),
+        content: const Text('Are you sure you want to delete this task?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _taskService.deleteTask(taskId);
+              _showSnackBar('Task deleted');
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Widget _buildSubtaskList(Task task) {
+    if (task.subtasks.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Text(
+          'No subtasks yet. Tap + to add one.',
+          style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    return Column(
+      children: List.generate(task.subtasks.length, (index) {
+        final subtask = task.subtasks[index];
+        return ListTile(
+          leading: Checkbox(
+            value: subtask['isCompleted'],
+            onChanged: (_) => _taskService.toggleSubtask(task, index),
+          ),
+          title: Text(
+            subtask['title'],
+            style: TextStyle(
+              decoration: subtask['isCompleted']
+                  ? TextDecoration.lineThrough
+                  : null,
+            ),
+          ),
+          trailing: IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20),
+            onPressed: () => _taskService.deleteSubtask(task, index),
+          ),
+          dense: true,
+        );
+      }),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Task Manager')),
+      appBar: AppBar(
+        title: const Text('Task Manager'),
+        backgroundColor: Theme.of(context).primaryColor,
+        foregroundColor: Colors.white,
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(8.0),
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.grey[100],
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _taskController,
                     decoration: const InputDecoration(
-                      hintText: 'New task...',
+                      hintText: 'Enter a new task...',
                       border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
+                    onSubmitted: (_) => _addTask(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(onPressed: _addTask, child: const Text('Add')),
+                ElevatedButton.icon(
+                  onPressed: _addTask,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add'),
+                ),
               ],
             ),
           ),
+
           Expanded(
             child: StreamBuilder<List<Task>>(
               stream: _taskService.streamTasks(),
@@ -88,13 +172,57 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.red,
+                        ),
+                        const SizedBox(height: 16),
+                        Text('Error: ${snapshot.error}'),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => setState(() {}),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 final tasks = snapshot.data ?? [];
+
                 if (tasks.isEmpty) {
-                  return const Center(child: Text('No tasks yet'));
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 64,
+                          color: Colors.grey,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'No tasks yet!',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Add a task using the field above',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  );
                 }
 
                 return ListView.builder(
@@ -118,6 +246,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
                             title: Text(
                               task.title,
                               style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
                                 decoration: task.isCompleted
                                     ? TextDecoration.lineThrough
                                     : null,
@@ -132,52 +262,55 @@ class _TaskListScreenState extends State<TaskListScreen> {
                                         ? Icons.expand_less
                                         : Icons.expand_more,
                                   ),
-                                  onPressed: () => setState(() {
-                                    _expandedTaskId = isExpanded
-                                        ? null
-                                        : task.id;
-                                  }),
+                                  onPressed: () {
+                                    setState(() {
+                                      _expandedTaskId = isExpanded
+                                          ? null
+                                          : task.id;
+                                    });
+                                  },
                                 ),
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    color: Colors.red,
+                                  ),
                                   onPressed: () =>
-                                      _taskService.deleteTask(task.id),
+                                      _showDeleteConfirmDialog(task.id),
                                 ),
                               ],
                             ),
+                            onTap: () {
+                              setState(() {
+                                _expandedTaskId = isExpanded ? null : task.id;
+                              });
+                            },
                           ),
+
                           if (isExpanded)
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
+                            Container(
+                              decoration: const BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(color: Colors.grey),
+                                ),
+                              ),
                               child: Column(
                                 children: [
-                                  ...task.subtasks.map(
-                                    (subtask) => ListTile(
-                                      dense: true,
-                                      leading: Checkbox(
-                                        value: subtask['isCompleted'],
-                                        onChanged: (_) =>
-                                            _taskService.toggleSubtask(
-                                              task,
-                                              task.subtasks.indexOf(subtask),
-                                            ),
-                                      ),
-                                      title: Text(subtask['title']),
-                                      trailing: IconButton(
-                                        icon: const Icon(Icons.close, size: 18),
-                                        onPressed: () =>
-                                            _taskService.deleteSubtask(
-                                              task,
-                                              task.subtasks.indexOf(subtask),
-                                            ),
+                                  _buildSubtaskList(task),
+                                  Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: ElevatedButton.icon(
+                                      onPressed: () =>
+                                          _showAddSubtaskDialog(task),
+                                      icon: const Icon(Icons.add, size: 18),
+                                      label: const Text('Add Subtask'),
+                                      style: ElevatedButton.styleFrom(
+                                        minimumSize: const Size(
+                                          double.infinity,
+                                          40,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  ElevatedButton.icon(
-                                    onPressed: () =>
-                                        _showAddSubtaskDialog(task),
-                                    icon: const Icon(Icons.add),
-                                    label: const Text('Add Subtask'),
                                   ),
                                 ],
                               ),
